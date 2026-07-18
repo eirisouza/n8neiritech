@@ -1,0 +1,41 @@
+# ─── Ambientes e segredos ───
+.env
+.env.local
+.env.*.local
+*.env
+
+# ─── .NET ───
+**/bin/
+**/obj/
+**/*.user
+**/*.suo
+**/.vs/
+**/TestResults/
+**/coverage/
+*.nupkg
+
+# ─── Node ───
+**/node_modules/
+**/dist/
+**/.vite/
+**/.cache/
+
+# ─── Logs ───
+*.log
+logs/
+/backend/logs/
+
+# ─── Uploads temporários ───
+/backend/uploads/
+
+# ─── Docker volumes ───
+# (gerenciados pelo docker)
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+
+# ─── IDE ───
+.idea/
+*.swp
+*.swo

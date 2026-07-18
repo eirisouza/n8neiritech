@@ -1,0 +1,73 @@
+{
+  "name": "10 - Tratamento de Falhas",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "error-handler",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "receber-erro",
+      "name": "Receber Erro",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe erros dos outros workflows para centralizar tratamento."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Classifica o tipo de erro\nconst error = $json.body || $json;\nconst errorType = (() => {\n  const msg = (error.message || error.error || '').toLowerCase();\n  if (msg.includes('timeout')) return 'timeout';\n  if (msg.includes('401') || msg.includes('unauthorized')) return 'auth';\n  if (msg.includes('404')) return 'not_found';\n  if (msg.includes('429') || msg.includes('rate limit')) return 'rate_limit';\n  if (msg.includes('500') || msg.includes('internal')) return 'server_error';\n  return 'unknown';\n})();\n\nconst shouldRetry = ['timeout', 'rate_limit', 'server_error'].includes(errorType);\nconst retryCount = (error.retryCount || 0) + 1;\nconst maxRetries = 3;\n\nreturn {\n  errorType,\n  shouldRetry: shouldRetry && retryCount <= maxRetries,\n  retryCount,\n  maxRetries,\n  error: error,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "classificar-erro",
+      "name": "Classificar Erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "notes": "Classifica o tipo de erro para decidir como tratar."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/register-error",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 5000 },
+        "continueOnFail": true
+      },
+      "id": "registrar-erro",
+      "name": "Registrar Erro no Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 300],
+      "notes": "Registra o erro no banco de dados para auditoria."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error_handled\" }"
+      },
+      "id": "responder-handler",
+      "name": "Responder Handler",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [800, 300]
+    }
+  ],
+  "connections": {
+    "Receber Erro": { "main": [[{ "node": "Classificar Erro", "type": "main", "index": 0 }]] },
+    "Classificar Erro": { "main": [[{ "node": "Registrar Erro no Backend", "type": "main", "index": 0 }]] },
+    "Registrar Erro no Backend": { "main": [[{ "node": "Responder Handler", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": ["errors"]
+}

@@ -1,0 +1,242 @@
+{
+  "name": "02 - Processamento de Mensagem do Cliente",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "process-message",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-processar",
+      "name": "Receber para Processar",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe a mensagem normalizada do workflow de entrada."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/session/{{ $json.body.fromNumber }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 5000 }
+      },
+      "id": "carregar-sessao",
+      "name": "Carregar Sessão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "notes": "Carrega a sessão/estado atual da conversa do cliente.",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "bloqueado",
+              "leftValue": "={{ $json.customer?.isBlocked }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ]
+        }
+      },
+      "id": "verificar-bloqueio",
+      "name": "Cliente Bloqueado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "notes": "Verifica se o cliente está bloqueado. Se sim, ignora a mensagem."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "humano",
+              "leftValue": "={{ $json.session?.status }}",
+              "rightValue": "HumanAttendance",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "atendimento-humano",
+      "name": "Em Atendimento Humano?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "notes": "Verifica se a conversa está em atendimento humano. Se sim, não processa com bot."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/detect-intent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" },
+            { "name": "X-Correlation-Id", "value": "={{ $('Receber para Processar').item.json.body.correlationId }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $('Receber para Processar').item.json.body.text, sessionStatus: $('Carregar Sessão').item.json.session?.status, sessionData: $('Carregar Sessão').item.json.session?.data }) }}",
+        "options": { "timeout": 15000 }
+      },
+      "id": "detectar-intencao",
+      "name": "Detectar Intenção",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 400],
+      "notes": "Chama o backend para detectar a intenção da mensagem e extrair entidades."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "search_product", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "buscar_produto"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "human_request", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "humano"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "order_confirm", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "confirmar_pedido"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.intent }}", "rightValue": "faq", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "faq"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "rotear-intencao",
+      "name": "Rotear Intenção",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1200, 400],
+      "notes": "Roteia a mensagem de acordo com a intenção detectada."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/generate-response",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ fromNumber: $('Receber para Processar').item.json.body.fromNumber, instanceId: $('Receber para Processar').item.json.body.instanceId, intent: $json.intent, entities: $json.entities, sessionData: $('Carregar Sessão').item.json.session?.data, correlationId: $('Receber para Processar').item.json.body.correlationId }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "gerar-resposta",
+      "name": "Gerar Resposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 400],
+      "notes": "Gera a resposta adequada para o cliente com base na intenção e contexto."
+    },
+    {
+      "parameters": {
+        "workflowId": "03-whatsapp-send-message",
+        "options": {}
+      },
+      "id": "enviar-resposta",
+      "name": "Enviar Resposta",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1600, 400],
+      "notes": "Chama o workflow de envio de mensagem."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"processed\" }"
+      },
+      "id": "responder-ok",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1800, 300]
+    }
+  ],
+  "connections": {
+    "Receber para Processar": {
+      "main": [[{ "node": "Carregar Sessão", "type": "main", "index": 0 }]]
+    },
+    "Carregar Sessão": {
+      "main": [[{ "node": "Cliente Bloqueado?", "type": "main", "index": 0 }]]
+    },
+    "Cliente Bloqueado?": {
+      "main": [
+        [{ "node": "Responder OK", "type": "main", "index": 0 }],
+        [{ "node": "Em Atendimento Humano?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Em Atendimento Humano?": {
+      "main": [
+        [{ "node": "Responder OK", "type": "main", "index": 0 }],
+        [{ "node": "Detectar Intenção", "type": "main", "index": 0 }]
+      ]
+    },
+    "Detectar Intenção": {
+      "main": [[{ "node": "Rotear Intenção", "type": "main", "index": 0 }]]
+    },
+    "Rotear Intenção": {
+      "main": [
+        [{ "node": "Gerar Resposta", "type": "main", "index": 0 }],
+        [{ "node": "Gerar Resposta", "type": "main", "index": 0 }],
+        [{ "node": "Gerar Resposta", "type": "main", "index": 0 }],
+        [{ "node": "Gerar Resposta", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gerar Resposta": {
+      "main": [[{ "node": "Enviar Resposta", "type": "main", "index": 0 }]]
+    },
+    "Enviar Resposta": {
+      "main": [[{ "node": "Responder OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "10-error-handler"
+  },
+  "tags": ["whatsapp", "processing"]
+}

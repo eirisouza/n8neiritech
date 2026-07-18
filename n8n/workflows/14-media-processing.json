@@ -1,0 +1,93 @@
+{
+  "name": "14 - Processamento de Mídia",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "media-processing",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "receber-midia",
+      "name": "Receber Mídia",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe mensagem com mídia para processamento."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            { "leftValue": "={{ $json.body.messageType }}", "rightValue": "Audio", "operator": { "type": "string", "operation": "equals" } }
+          ]
+        }
+      },
+      "id": "e-audio",
+      "name": "É Áudio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/transcribe-audio",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ mediaUrl: $('Receber Mídia').item.json.body.mediaUrl, correlationId: $('Receber Mídia').item.json.body.correlationId }) }}",
+        "options": { "timeout": 60000 },
+        "continueOnFail": true
+      },
+      "id": "transcrever-audio",
+      "name": "Transcrever Áudio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 200],
+      "notes": "Transcreve o áudio para texto usando o serviço configurado."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Se a transcrição falhou, retorna mensagem padrão\nconst transcription = $json.transcription || $json.text;\nconst original = $('Receber Mídia').item.json.body;\n\nreturn {\n  ...original,\n  messageType: 'Text',\n  text: transcription || '[Áudio recebido - não foi possível transcrever]',\n  originalMediaUrl: original.mediaUrl\n};"
+      },
+      "id": "normalizar-transcricao",
+      "name": "Normalizar Transcrição",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "responder-midia",
+      "name": "Responder com Mídia Processada",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Receber Mídia": { "main": [[{ "node": "É Áudio?", "type": "main", "index": 0 }]] },
+    "É Áudio?": {
+      "main": [
+        [{ "node": "Transcrever Áudio", "type": "main", "index": 0 }],
+        [{ "node": "Responder com Mídia Processada", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transcrever Áudio": { "main": [[{ "node": "Normalizar Transcrição", "type": "main", "index": 0 }]] },
+    "Normalizar Transcrição": { "main": [[{ "node": "Responder com Mídia Processada", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": ["media"]
+}
