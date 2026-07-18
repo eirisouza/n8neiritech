@@ -1,0 +1,109 @@
+{
+  "name": "06 - Encaminhamento para Humano",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "human-handoff",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "receber-handoff",
+      "name": "Receber Solicitação de Atendente",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe solicitação de encaminhamento para atendente humano."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/pause-bot",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ conversationId: $json.body.conversationId, reason: $json.body.reason || 'human_request' }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "pausar-bot",
+      "name": "Pausar Automação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "notes": "Pausa a automação para a conversa e muda status para aguardando atendente."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/conversations/{{ $('Receber Solicitação de Atendente').item.json.body.conversationId }}/assign",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"agentId\": null }",
+        "options": { "timeout": 10000 },
+        "continueOnFail": true
+      },
+      "id": "atribuir-agente",
+      "name": "Atribuir ao Agente Disponível",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 300],
+      "notes": "Tenta atribuir automaticamente ao agente disponível."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/whatsapp/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ instanceId: $('Receber Solicitação de Atendente').item.json.body.instanceId, to: $('Receber Solicitação de Atendente').item.json.body.customerPhone, type: 'text', text: '✅ Sua solicitação foi recebida! Um de nossos atendentes irá te ajudar em breve. Por favor, aguarde.' }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "avisar-cliente",
+      "name": "Avisar Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 300],
+      "notes": "Envia mensagem ao cliente avisando que um atendente irá ajudá-lo."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"handed_off\" }"
+      },
+      "id": "responder-handoff",
+      "name": "Responder Encaminhado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Receber Solicitação de Atendente": { "main": [[{ "node": "Pausar Automação", "type": "main", "index": 0 }]] },
+    "Pausar Automação": { "main": [[{ "node": "Atribuir ao Agente Disponível", "type": "main", "index": 0 }]] },
+    "Atribuir ao Agente Disponível": { "main": [[{ "node": "Avisar Cliente", "type": "main", "index": 0 }]] },
+    "Avisar Cliente": { "main": [[{ "node": "Responder Encaminhado", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "10-error-handler" },
+  "tags": ["human-handoff"]
+}

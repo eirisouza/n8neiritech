@@ -1,0 +1,140 @@
+{
+  "name": "04 - Consulta de Produtos",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "product-search",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "receber-busca",
+      "name": "Receber Busca",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe os termos de pesquisa de produto."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai e sanitiza os parâmetros de busca\nconst body = $input.item.json.body || {};\nconst query = {\n  q: body.query || body.q || '',\n  categoryId: body.categoryId || null,\n  brand: body.brand || null,\n  minPrice: body.minPrice || null,\n  maxPrice: body.maxPrice || null,\n  inStock: body.inStock !== false,\n  page: body.page || 1,\n  pageSize: Math.min(body.pageSize || 10, 20),\n  storeId: body.storeId || '',\n  tenantId: body.tenantId || ''\n};\n\n// Monta query string\nconst params = Object.entries(query)\n  .filter(([_, v]) => v !== null && v !== '')\n  .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)\n  .join('&');\n\nreturn { params, query };"
+      },
+      "id": "preparar-busca",
+      "name": "Preparar Parâmetros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "notes": "Sanitiza e prepara os parâmetros de busca."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/products?{{ $json.params }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "buscar-produtos",
+      "name": "Buscar Produtos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 300],
+      "notes": "Consulta os produtos na API backend com os filtros aplicados."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "leftValue": "={{ $json.totalCount }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "tem-resultados",
+      "name": "Tem Resultados?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "notes": "Verifica se houve resultados na busca."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/products?q={{ $('Preparar Parâmetros').item.json.query.q }}&inStock=false&page=1&pageSize=5",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "buscar-alternativas",
+      "name": "Buscar Alternativas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 200],
+      "notes": "Busca produtos similares quando não há resultado exato."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formata a lista de produtos para resposta ao cliente\nconst products = $json.items || [];\nconst isAlternatives = false;\n\nconst formatted = products.map((p, i) => ({\n  index: i + 1,\n  id: p.id,\n  sku: p.sku,\n  name: p.name,\n  brand: p.brand,\n  price: p.price,\n  promotionalPrice: p.promotionalPrice,\n  stock: p.stock,\n  unit: p.unit,\n  category: p.category?.name,\n  imageUrl: p.images?.[0]?.url,\n  shortDescription: p.shortDescription\n}));\n\nreturn {\n  products: formatted,\n  total: $json.totalCount || formatted.length,\n  hasMore: ($json.page || 1) < ($json.totalPages || 1)\n};"
+      },
+      "id": "formatar-resultados",
+      "name": "Formatar Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400],
+      "notes": "Formata os produtos para exibição no WhatsApp."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "responder-busca",
+      "name": "Responder Busca",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 350]
+    }
+  ],
+  "connections": {
+    "Receber Busca": {
+      "main": [[{ "node": "Preparar Parâmetros", "type": "main", "index": 0 }]]
+    },
+    "Preparar Parâmetros": {
+      "main": [[{ "node": "Buscar Produtos", "type": "main", "index": 0 }]]
+    },
+    "Buscar Produtos": {
+      "main": [[{ "node": "Tem Resultados?", "type": "main", "index": 0 }]]
+    },
+    "Tem Resultados?": {
+      "main": [
+        [{ "node": "Buscar Alternativas", "type": "main", "index": 0 }],
+        [{ "node": "Formatar Resultados", "type": "main", "index": 0 }]
+      ]
+    },
+    "Buscar Alternativas": {
+      "main": [[{ "node": "Formatar Resultados", "type": "main", "index": 0 }]]
+    },
+    "Formatar Resultados": {
+      "main": [[{ "node": "Responder Busca", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": ["products", "search"]
+}

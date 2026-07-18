@@ -1,0 +1,6 @@
+@n8neiritech.Api_HostAddress = http://localhost:5040
+
+GET {{n8neiritech.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

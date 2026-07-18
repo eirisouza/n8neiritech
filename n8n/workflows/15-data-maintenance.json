@@ -1,0 +1,53 @@
+{
+  "name": "15 - Limpeza e Manutenção",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 2 * * 0" }] }
+      },
+      "id": "trigger-manutencao",
+      "name": "Manutenção Semanal às 2h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "notes": "Executa manutenção toda segunda-feira às 2h."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/maintenance/cleanup",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 300000 }
+      },
+      "id": "executar-limpeza",
+      "name": "Executar Limpeza",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "notes": "Executa limpeza: sessões expiradas, cache, logs antigos, webhooks travados."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Registra resultado da manutenção\nconsole.log('[Maintenance] Resultado:', JSON.stringify($json));\nreturn {\n  status: 'completed',\n  deletedSessions: $json.deletedSessions || 0,\n  deletedLogs: $json.deletedLogs || 0,\n  reprocessedEvents: $json.reprocessedEvents || 0,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "registrar-manutencao",
+      "name": "Registrar Manutenção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    }
+  ],
+  "connections": {
+    "Manutenção Semanal às 2h": { "main": [[{ "node": "Executar Limpeza", "type": "main", "index": 0 }]] },
+    "Executar Limpeza": { "main": [[{ "node": "Registrar Manutenção", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": ["maintenance"]
+}

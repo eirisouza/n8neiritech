@@ -1,0 +1,70 @@
+{
+  "name": "13 - Notificação de Status de Pedido",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-status-notification",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "receber-status",
+      "name": "Receber Mudança de Status",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe notificação de mudança de status do pedido."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta mensagem de acordo com o status\nconst order = $json.body.order;\nconst status = order.status;\nconst name = order.customerName || 'Cliente';\nconst orderNum = order.orderNumber;\n\nconst messages = {\n  Confirmed: `✅ *Pedido ${orderNum} confirmado!*\\n\\nOlá ${name}! Seu pedido foi confirmado e está sendo preparado.`,\n  Preparing: `👨‍🍳 *Pedido ${orderNum} em preparação!*\\n\\nSeu pedido está sendo preparado.`,\n  ReadyForPickup: `🏪 *Pedido ${orderNum} pronto para retirada!*\\n\\nSeu pedido está pronto! Você pode retirá-lo em nossa loja.`,\n  OutForDelivery: `🚚 *Pedido ${orderNum} saiu para entrega!*\\n\\nSeu pedido está a caminho! Em breve chegará até você.`,\n  Delivered: `✅ *Pedido ${orderNum} entregue!*\\n\\nSeu pedido foi entregue. Obrigado pela compra! 😊`,\n  Cancelled: `❌ *Pedido ${orderNum} cancelado.*\\n\\n${order.cancellationReason ? 'Motivo: ' + order.cancellationReason : 'Seu pedido foi cancelado.'}\\n\\nPrecisa de ajuda? Digite \"atendente\".`\n};\n\nconst message = messages[status] || `📦 Status do pedido ${orderNum}: ${status}`;\nreturn { message, order };"
+      },
+      "id": "montar-mensagem",
+      "name": "Montar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/whatsapp/send",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ instanceId: $json.order.instanceId, to: $json.order.customerPhone, type: 'text', text: $json.message }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "enviar-notificacao",
+      "name": "Enviar Notificação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"notified\" }"
+      },
+      "id": "responder-notificado",
+      "name": "Responder Notificado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [800, 300]
+    }
+  ],
+  "connections": {
+    "Receber Mudança de Status": { "main": [[{ "node": "Montar Mensagem", "type": "main", "index": 0 }]] },
+    "Montar Mensagem": { "main": [[{ "node": "Enviar Notificação", "type": "main", "index": 0 }]] },
+    "Enviar Notificação": { "main": [[{ "node": "Responder Notificado", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "10-error-handler" },
+  "tags": ["orders", "notifications"]
+}

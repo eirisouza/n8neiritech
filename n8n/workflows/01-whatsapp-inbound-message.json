@@ -1,0 +1,214 @@
+{
+  "name": "01 - Recebimento de Mensagem WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-entrada",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe o webhook do provedor WhatsApp. Configura o path igual ao registrado no provedor."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validação do segredo do webhook\nconst secret = $env.WHATSAPP_WEBHOOK_SECRET;\nconst receivedSecret = $input.item.json.headers?.['x-webhook-secret'] \n  || $input.item.json.headers?.['x-hub-signature-256']\n  || $input.item.json.query?.secret;\n\nif (secret && receivedSecret !== secret) {\n  throw new Error('Webhook secret inválido');\n}\n\nreturn { valid: true, payload: $input.item.json.body };"
+      },
+      "id": "validar-segredo",
+      "name": "Validar Segredo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "notes": "Valida o segredo do webhook para evitar chamadas não autorizadas."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza o payload do provedor para o modelo interno\nconst body = $input.item.json.payload;\nconst correlationId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);\n\n// Suporte ao formato Evolution API\nlet normalized = null;\n\nif (body?.data?.message) {\n  const msg = body.data.message;\n  const key = msg.key || {};\n  const pushName = body.data?.pushName || body.data?.verifiedBizName || '';\n  \n  normalized = {\n    messageId: key.id || '',\n    instanceId: body.instance || '',\n    fromNumber: key.remoteJid?.replace('@s.whatsapp.net', '').replace('@g.us', '') || '',\n    toNumber: body.sender || '',\n    contactName: pushName,\n    text: msg.message?.conversation \n      || msg.message?.extendedTextMessage?.text \n      || msg.message?.imageMessage?.caption\n      || msg.message?.videoMessage?.caption\n      || '',\n    messageType: (() => {\n      if (msg.message?.conversation || msg.message?.extendedTextMessage) return 'Text';\n      if (msg.message?.imageMessage) return 'Image';\n      if (msg.message?.audioMessage || msg.message?.pttMessage) return 'Audio';\n      if (msg.message?.videoMessage) return 'Video';\n      if (msg.message?.documentMessage) return 'Document';\n      if (msg.message?.stickerMessage) return 'Sticker';\n      if (msg.message?.locationMessage) return 'Location';\n      return 'Unknown';\n    })(),\n    timestamp: new Date(msg.messageTimestamp ? msg.messageTimestamp * 1000 : Date.now()).toISOString(),\n    mediaUrl: msg.message?.imageMessage?.url \n      || msg.message?.audioMessage?.url \n      || msg.message?.videoMessage?.url\n      || msg.message?.documentMessage?.url\n      || null,\n    quotedMessageId: msg.message?.extendedTextMessage?.contextInfo?.stanzaId || null,\n    status: 'Received',\n    providerMetadata: JSON.stringify({ event: body.event, instance: body.instance }),\n    correlationId,\n    isFromMe: key.fromMe || false,\n    isGroup: key.remoteJid?.includes('@g.us') || false\n  };\n}\n\nif (!normalized) {\n  throw new Error('Formato de payload não reconhecido: ' + JSON.stringify(body).substring(0, 200));\n}\n\nreturn { normalized, correlationId };"
+      },
+      "id": "normalizar-payload",
+      "name": "Normalizar Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "notes": "Normaliza o payload do provedor para o modelo interno padrão."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "id": "ignorar-proprio",
+              "leftValue": "={{ $json.normalized.isFromMe }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "ignorar-proprias",
+      "name": "Ignorar Mensagens Próprias",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "notes": "Ignora mensagens enviadas pela própria conta para evitar loops."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "ignorar-grupo",
+              "leftValue": "={{ $json.normalized.isGroup }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "ignorar-grupos",
+      "name": "Ignorar Grupos",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 400],
+      "notes": "Ignora mensagens de grupos por padrão."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/register-event",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" },
+            { "name": "X-Correlation-Id", "value": "={{ $json.normalized.correlationId }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "=", "value": "={{ JSON.stringify($json.normalized) }}" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "registrar-evento",
+      "name": "Registrar Evento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 400],
+      "notes": "Registra o evento no backend para auditoria e idempotência.",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/process-message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" },
+            { "name": "X-Correlation-Id", "value": "={{ $json.normalized.correlationId }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.normalized) }}",
+        "options": { "timeout": 30000 },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 1000
+      },
+      "id": "processar-mensagem",
+      "name": "Processar Mensagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 400],
+      "notes": "Chama o backend para processar a mensagem e gerar resposta."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"correlationId\": \"{{ $('Normalizar Payload').item.json.correlationId }}\" }"
+      },
+      "id": "responder-webhook",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1600, 300],
+      "notes": "Responde rapidamente ao webhook para evitar timeout do provedor."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ignored\", \"reason\": \"own-message\" }",
+        "responseCode": 200
+      },
+      "id": "ignorar-resposta",
+      "name": "Responder Ignorado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Registra o erro e retorna resposta de falha\nconst error = $input.item.json.error || 'Erro desconhecido';\nconsole.error('[Webhook] Erro:', error, 'Correlation:', $json?.correlationId);\nreturn { error: error, correlationId: $json?.correlationId || 'unknown' };"
+      },
+      "id": "tratar-erro",
+      "name": "Tratar Erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 550],
+      "notes": "Registra erros de processamento."
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": {
+      "main": [[{ "node": "Validar Segredo", "type": "main", "index": 0 }]]
+    },
+    "Validar Segredo": {
+      "main": [[{ "node": "Normalizar Payload", "type": "main", "index": 0 }]]
+    },
+    "Normalizar Payload": {
+      "main": [[{ "node": "Ignorar Mensagens Próprias", "type": "main", "index": 0 }]]
+    },
+    "Ignorar Mensagens Próprias": {
+      "main": [
+        [{ "node": "Ignorar Resposta", "type": "main", "index": 0 }],
+        [{ "node": "Ignorar Grupos", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ignorar Grupos": {
+      "main": [
+        [{ "node": "Ignorar Resposta", "type": "main", "index": 0 }],
+        [{ "node": "Registrar Evento", "type": "main", "index": 0 }]
+      ]
+    },
+    "Registrar Evento": {
+      "main": [[{ "node": "Processar Mensagem", "type": "main", "index": 0 }]]
+    },
+    "Processar Mensagem": {
+      "main": [[{ "node": "Responder Webhook", "type": "main", "index": 0 }]],
+      "error": [[{ "node": "Tratar Erro", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "10-error-handler"
+  },
+  "staticData": null,
+  "tags": ["whatsapp", "inbound"],
+  "triggerCount": 1
+}

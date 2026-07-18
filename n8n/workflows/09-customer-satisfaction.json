@@ -1,0 +1,75 @@
+{
+  "name": "09 - Pesquisa de Satisfação",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 4 }] }
+      },
+      "id": "trigger-satisfacao",
+      "name": "Verificar Atendimentos Finalizados",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/conversations/pending-satisfaction",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "buscar-pendentes",
+      "name": "Buscar Pendentes de Avaliação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "id": "dividir-atendimentos",
+      "name": "Dividir por Atendimento",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/whatsapp/send",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ instanceId: $json.instanceId, to: $json.customerPhone, type: 'text', text: 'Olá ' + ($json.customerName || '') + '! Seu atendimento foi finalizado. Como você avalia nosso atendimento?\\n\\n⭐ 1 - Péssimo\\n⭐⭐ 2 - Ruim\\n⭐⭐⭐ 3 - Regular\\n⭐⭐⭐⭐ 4 - Bom\\n⭐⭐⭐⭐⭐ 5 - Excelente\\n\\nResponda com o número de 1 a 5.' }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "enviar-pesquisa",
+      "name": "Enviar Pesquisa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 300]
+    }
+  ],
+  "connections": {
+    "Verificar Atendimentos Finalizados": { "main": [[{ "node": "Buscar Pendentes de Avaliação", "type": "main", "index": 0 }]] },
+    "Buscar Pendentes de Avaliação": { "main": [[{ "node": "Dividir por Atendimento", "type": "main", "index": 0 }]] },
+    "Dividir por Atendimento": { "main": [[{ "node": "Enviar Pesquisa", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": ["satisfaction"]
+}

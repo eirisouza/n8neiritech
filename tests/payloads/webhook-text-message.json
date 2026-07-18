@@ -1,0 +1,19 @@
+{
+  "event": "messages.upsert",
+  "instance": "default",
+  "sender": "5511999990000@s.whatsapp.net",
+  "data": {
+    "pushName": "João Silva",
+    "message": {
+      "key": {
+        "remoteJid": "5511888880000@s.whatsapp.net",
+        "fromMe": false,
+        "id": "3EB0A1B2C3D4E5F60000"
+      },
+      "messageTimestamp": 1720000000,
+      "message": {
+        "conversation": "Olá! Vocês têm arroz de 5kg?"
+      }
+    }
+  }
+}

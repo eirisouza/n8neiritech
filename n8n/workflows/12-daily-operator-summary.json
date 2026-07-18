@@ -1,0 +1,51 @@
+{
+  "name": "12 - Resumo Diário para Operadores",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }] }
+      },
+      "id": "trigger-resumo",
+      "name": "Resumo às 8h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "notes": "Gera resumo diário todos os dias às 8h."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/dashboard/daily-summary",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "id": "gerar-resumo",
+      "name": "Gerar Resumo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formata o resumo para WhatsApp\nconst d = $json;\nconst yesterday = new Date();\nyesterday.setDate(yesterday.getDate() - 1);\nconst dateStr = yesterday.toLocaleDateString('pt-BR');\n\nconst msg = `📊 *Resumo do dia ${dateStr}*\\n\\n` +\n  `💬 Conversas: ${d.totalConversations || 0}\\n` +\n  `👥 Clientes atendidos: ${d.uniqueCustomers || 0}\\n` +\n  `🛒 Pedidos: ${d.totalOrders || 0}\\n` +\n  `💰 Faturamento: R$ ${(d.revenue || 0).toFixed(2)}\\n` +\n  `📈 Conversão: ${d.conversionRate || 0}%\\n` +\n  `👤 Atend. humanos: ${d.humanHandoffs || 0}\\n` +\n  `⚡ Tempo médio: ${d.avgResponseTime || 0}s\\n` +\n  `❌ Erros: ${d.errors || 0}\\n\\n` +\n  `🔝 *Produtos mais buscados:*\\n` +\n  (d.topProducts || []).slice(0, 5).map((p, i) => `${i+1}. ${p.name} (${p.searches}x)`).join('\\n');\n\nreturn { message: msg };"
+      },
+      "id": "formatar-resumo",
+      "name": "Formatar Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    }
+  ],
+  "connections": {
+    "Resumo às 8h": { "main": [[{ "node": "Gerar Resumo", "type": "main", "index": 0 }]] },
+    "Gerar Resumo": { "main": [[{ "node": "Formatar Resumo", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": ["reporting"]
+}

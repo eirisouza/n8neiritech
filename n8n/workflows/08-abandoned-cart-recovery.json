@@ -1,0 +1,118 @@
+{
+  "name": "08 - Recuperação de Carrinho Abandonado",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 2 }] }
+      },
+      "id": "trigger-carrinhos",
+      "name": "Verificar Carrinhos Abandonados",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "notes": "Verifica carrinhos abandonados a cada 2 horas."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/orders/abandoned-carts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "buscar-carrinhos",
+      "name": "Buscar Carrinhos Abandonados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "notes": "Busca carrinhos abandonados que não receberam lembrete ainda."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "id": "dividir-carrinhos",
+      "name": "Dividir por Carrinho",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "notes": "Processa cada carrinho abandonado individualmente."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            { "leftValue": "={{ $json.customer?.consentMarketing }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+          ]
+        }
+      },
+      "id": "verificar-consentimento",
+      "name": "Tem Consentimento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "notes": "Só envia lembrete se o cliente deu consentimento para mensagens de marketing."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/whatsapp/send",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ instanceId: $json.instanceId, to: $json.customer.phone, type: 'text', text: 'Oi ' + ($json.customer.name || '') + '! 😊 Você deixou ' + $json.itemCount + ' item(s) no carrinho. Quer continuar sua compra? Responda \"continuar\" para ver seu carrinho ou \"cancelar\" para desistir.' }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "enviar-lembrete",
+      "name": "Enviar Lembrete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 200],
+      "notes": "Envia mensagem de recuperação de carrinho abandonado."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/orders/{{ $json.orderId }}/mark-reminder-sent",
+        "method": "PUT",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 5000 }
+      },
+      "id": "marcar-enviado",
+      "name": "Marcar Lembrete Enviado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 200],
+      "notes": "Registra que o lembrete foi enviado para não reenviar."
+    }
+  ],
+  "connections": {
+    "Verificar Carrinhos Abandonados": { "main": [[{ "node": "Buscar Carrinhos Abandonados", "type": "main", "index": 0 }]] },
+    "Buscar Carrinhos Abandonados": { "main": [[{ "node": "Dividir por Carrinho", "type": "main", "index": 0 }]] },
+    "Dividir por Carrinho": { "main": [[{ "node": "Tem Consentimento?", "type": "main", "index": 0 }]] },
+    "Tem Consentimento?": { "main": [[{ "node": "Enviar Lembrete", "type": "main", "index": 0 }], []] },
+    "Enviar Lembrete": { "main": [[{ "node": "Marcar Lembrete Enviado", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "10-error-handler" },
+  "tags": ["abandoned-cart"]
+}

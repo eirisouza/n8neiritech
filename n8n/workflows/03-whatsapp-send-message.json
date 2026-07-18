@@ -1,0 +1,229 @@
+{
+  "name": "03 - Envio de Mensagem WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "receber-envio",
+      "name": "Receber para Envio",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe a mensagem a ser enviada, normalizada pelo backend."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.body.type }}", "rightValue": "text", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "texto"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.body.type }}", "rightValue": "image", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "imagem"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.body.type }}", "rightValue": "audio", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.body.type }}", "rightValue": "buttons", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "botoes"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tipo-mensagem",
+      "name": "Tipo de Mensagem",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [400, 300],
+      "notes": "Roteia de acordo com o tipo de mensagem a ser enviada."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/whatsapp/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" },
+            { "name": "X-Correlation-Id", "value": "={{ $('Receber para Envio').item.json.body.correlationId }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Receber para Envio').item.json.body) }}",
+        "options": { "timeout": 15000 },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      },
+      "id": "enviar-texto",
+      "name": "Enviar Texto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 200],
+      "notes": "Envia mensagem de texto via backend."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/whatsapp/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Receber para Envio').item.json.body) }}",
+        "options": { "timeout": 30000 },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 3000
+      },
+      "id": "enviar-imagem",
+      "name": "Enviar Imagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300],
+      "notes": "Envia imagem com caption."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/whatsapp/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Receber para Envio').item.json.body) }}",
+        "options": { "timeout": 30000 },
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 2000
+      },
+      "id": "enviar-audio",
+      "name": "Enviar Áudio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 400],
+      "notes": "Envia mensagem de áudio."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/whatsapp/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Receber para Envio').item.json.body) }}",
+        "options": { "timeout": 15000 }
+      },
+      "id": "enviar-botoes",
+      "name": "Enviar Botões",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 500],
+      "notes": "Envia mensagem com botões interativos."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/automation/register-sent-message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ result: $json, originalMessage: $('Receber para Envio').item.json.body }) }}",
+        "options": { "timeout": 5000 },
+        "continueOnFail": true
+      },
+      "id": "registrar-envio",
+      "name": "Registrar Envio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 350],
+      "notes": "Registra o resultado do envio no banco de dados."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"sent\" }"
+      },
+      "id": "responder-enviado",
+      "name": "Responder Enviado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 350]
+    }
+  ],
+  "connections": {
+    "Receber para Envio": {
+      "main": [[{ "node": "Tipo de Mensagem", "type": "main", "index": 0 }]]
+    },
+    "Tipo de Mensagem": {
+      "main": [
+        [{ "node": "Enviar Texto", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Imagem", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Áudio", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Botões", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar Texto": { "main": [[{ "node": "Registrar Envio", "type": "main", "index": 0 }]] },
+    "Enviar Imagem": { "main": [[{ "node": "Registrar Envio", "type": "main", "index": 0 }]] },
+    "Enviar Áudio": { "main": [[{ "node": "Registrar Envio", "type": "main", "index": 0 }]] },
+    "Enviar Botões": { "main": [[{ "node": "Registrar Envio", "type": "main", "index": 0 }]] },
+    "Registrar Envio": {
+      "main": [[{ "node": "Responder Enviado", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "10-error-handler"
+  },
+  "tags": ["whatsapp", "outbound"]
+}

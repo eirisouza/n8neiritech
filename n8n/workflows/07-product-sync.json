@@ -1,0 +1,87 @@
+{
+  "name": "07 - Sincronização de Produtos",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] }
+      },
+      "id": "trigger-sync",
+      "name": "Agendamento de Sincronização",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "notes": "Executa sincronização de produtos a cada hora."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/products/sync",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 120000 }
+      },
+      "id": "executar-sync",
+      "name": "Executar Sincronização",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "notes": "Chama o endpoint de sincronização que processa todas as fontes configuradas."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            { "leftValue": "={{ $json.errors?.length }}", "rightValue": 0, "operator": { "type": "number", "operation": "gt" } }
+          ]
+        }
+      },
+      "id": "tem-erros",
+      "name": "Tem Erros?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "notes": "Verifica se houve erros na sincronização."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formata relatório de erros\nconst errors = $json.errors || [];\nconst report = errors.map(e => `• ${e.sku || 'N/A'}: ${e.error}`).join('\\n');\nconsole.error('[Sync] Erros na sincronização:', report);\nreturn { errorReport: report, count: errors.length };"
+      },
+      "id": "relatorio-erros",
+      "name": "Registrar Erros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 200],
+      "notes": "Registra relatório de erros da sincronização."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Registra sucesso da sincronização\nconsole.log('[Sync] Sincronização concluída:', JSON.stringify($json));\nreturn { status: 'success', synced: $json.synced, updated: $json.updated, errors: $json.errors?.length || 0 };"
+      },
+      "id": "registrar-sucesso",
+      "name": "Registrar Sucesso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400],
+      "notes": "Registra sucesso da sincronização."
+    }
+  ],
+  "connections": {
+    "Agendamento de Sincronização": { "main": [[{ "node": "Executar Sincronização", "type": "main", "index": 0 }]] },
+    "Executar Sincronização": { "main": [[{ "node": "Tem Erros?", "type": "main", "index": 0 }]] },
+    "Tem Erros?": {
+      "main": [
+        [{ "node": "Registrar Erros", "type": "main", "index": 0 }],
+        [{ "node": "Registrar Sucesso", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "10-error-handler" },
+  "tags": ["products", "sync"]
+}

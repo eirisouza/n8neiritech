@@ -1,0 +1,16 @@
+{
+  "event": "messages.update",
+  "instance": "default",
+  "data": [
+    {
+      "key": {
+        "remoteJid": "5511888880000@s.whatsapp.net",
+        "fromMe": true,
+        "id": "3EB0A1B2C3D4E5F60000"
+      },
+      "update": {
+        "status": 4
+      }
+    }
+  ]
+}

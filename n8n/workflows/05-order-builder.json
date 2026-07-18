@@ -1,0 +1,188 @@
+{
+  "name": "05 - Montagem de Pedido",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-builder",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "receber-acao",
+      "name": "Receber Ação de Pedido",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Recebe ações de montagem de pedido: add_item, remove_item, update_qty, confirm."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.body.action }}", "rightValue": "add_item", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "adicionar"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.body.action }}", "rightValue": "remove_item", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "remover"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.body.action }}", "rightValue": "update_qty", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "atualizar"
+            },
+            {
+              "conditions": {
+                "options": {},
+                "conditions": [{ "leftValue": "={{ $json.body.action }}", "rightValue": "confirm", "operator": { "type": "string", "operation": "equals" } }]
+              },
+              "renameOutput": true,
+              "outputKey": "confirmar"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "acao-pedido",
+      "name": "Ação do Pedido",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [400, 300],
+      "notes": "Roteia de acordo com a ação solicitada no pedido."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/orders/cart/add-item",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Receber Ação de Pedido').item.json.body) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "adicionar-item",
+      "name": "Adicionar Item",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 150],
+      "notes": "Adiciona item ao carrinho. Valida estoque antes de adicionar."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/orders/cart/remove-item",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Receber Ação de Pedido').item.json.body) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "remover-item",
+      "name": "Remover Item",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 280],
+      "notes": "Remove um item do carrinho."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/orders/cart/update-qty",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Receber Ação de Pedido').item.json.body) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "atualizar-qty",
+      "name": "Atualizar Quantidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 410],
+      "notes": "Atualiza a quantidade de um item no carrinho."
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BACKEND_URL }}/api/orders/confirm",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "={{ $env.N8N_INTERNAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Receber Ação de Pedido').item.json.body) }}",
+        "options": { "timeout": 15000 }
+      },
+      "id": "confirmar-pedido",
+      "name": "Confirmar Pedido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 540],
+      "notes": "Confirma o pedido. Valida estoque novamente, aplica promoções e gera número do pedido."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "responder-pedido",
+      "name": "Responder Pedido",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 350]
+    }
+  ],
+  "connections": {
+    "Receber Ação de Pedido": {
+      "main": [[{ "node": "Ação do Pedido", "type": "main", "index": 0 }]]
+    },
+    "Ação do Pedido": {
+      "main": [
+        [{ "node": "Adicionar Item", "type": "main", "index": 0 }],
+        [{ "node": "Remover Item", "type": "main", "index": 0 }],
+        [{ "node": "Atualizar Quantidade", "type": "main", "index": 0 }],
+        [{ "node": "Confirmar Pedido", "type": "main", "index": 0 }]
+      ]
+    },
+    "Adicionar Item": { "main": [[{ "node": "Responder Pedido", "type": "main", "index": 0 }]] },
+    "Remover Item": { "main": [[{ "node": "Responder Pedido", "type": "main", "index": 0 }]] },
+    "Atualizar Quantidade": { "main": [[{ "node": "Responder Pedido", "type": "main", "index": 0 }]] },
+    "Confirmar Pedido": { "main": [[{ "node": "Responder Pedido", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "10-error-handler" },
+  "tags": ["orders"]
+}
