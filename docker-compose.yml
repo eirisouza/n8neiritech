@@ -1,28 +1,28 @@
 services:
   # ──────────────────────────────────────────────────────────────────────────
-  # PostgreSQL
+  # MySQL
   # ──────────────────────────────────────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: n8neiritech-postgres
-    restart: unless-stopped
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: n8neiritech-mysql
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-n8neiritech}
-      POSTGRES_USER: ${POSTGRES_USER:-n8neiritech}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-n8neiritech_secret}
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: n8neiritech
+      MYSQL_USER: n8nuser
+      MYSQL_PASSWORD: n8npass123
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/seeds:/docker-entrypoint-initdb.d:ro
-    networks:
-      - n8neiritech-net
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8neiritech} -d ${POSTGRES_DB:-n8neiritech}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+    networks:
+      - n8neiritech-network
 
   # ──────────────────────────────────────────────────────────────────────────
   # Redis
