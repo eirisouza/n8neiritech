@@ -107,13 +107,13 @@ app.UseAuthorization();
 app.UseIpRateLimiting();
 app.MapControllers();
 
-if (builder.Configuration.GetValue<bool>("ApplyMigrationsOnStartup"))
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
-    await DataSeeder.SeedAsync(app.Services, builder.Configuration);
-}
+//if (builder.Configuration.GetValue<bool>("ApplyMigrationsOnStartup"))
+//{
+//    using var scope = app.Services.CreateScope();
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//    await db.Database.MigrateAsync();
+//    await DataSeeder.SeedAsync(app.Services, builder.Configuration);
+//}
 
 app.Run();
 
