@@ -1,12 +1,13 @@
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using n8neiritech.Api.Dtos;
 using n8neiritech.Application.DTOs;
 using n8neiritech.Application.Interfaces;
 using n8neiritech.Application.Services;
 using n8neiritech.Domain.Entities;
 using n8neiritech.Domain.Enums;
+using System.Text;
 
 namespace n8neiritech.Api.Controllers;
 
@@ -123,10 +124,10 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost("import")]
-    public async Task<IActionResult> Import([FromForm] IFormFile file, [FromForm] ProductSyncSource source, [FromForm] Guid storeId, CancellationToken ct)
+    public async Task<IActionResult> Import([FromForm] ImportProductRequest request, [FromForm] ProductSyncSource source, [FromForm] Guid storeId, CancellationToken ct)
     {
-        if (file.Length == 0) return BadRequest("Empty file.");
-        using var reader = new StreamReader(file.OpenReadStream(), Encoding.UTF8);
+        if (request.File.Length == 0) return BadRequest("Empty file.");
+        using var reader = new StreamReader(request.File.OpenReadStream(), Encoding.UTF8);
         var lines = (await reader.ReadToEndAsync(ct)).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var imported = 0;
         foreach (var line in lines.Skip(1))
