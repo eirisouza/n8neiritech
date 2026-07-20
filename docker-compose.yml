@@ -60,7 +60,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
-      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-n8neiritech};Username=${POSTGRES_USER:-n8neiritech};******"
+      ConnectionStrings__DefaultConnection: "Server=mysql;Port=3306;Database=n8neiritech;User=n8nuser;Password=n8npass123;"
       Redis__ConnectionString: "redis:6379,******"
       Jwt__Secret: ${JWT_SECRET:-change-this-jwt-secret-key-minimum-32-chars}
       Jwt__Issuer: ${JWT_ISSUER:-n8neiritech}
@@ -78,8 +78,8 @@ services:
       Ai__Model: ${AI_MODEL:-gpt-4o-mini}
       InternalApiKey: ${N8N_INTERNAL_API_KEY:-change-this-internal-api-key}
       Cors__AllowedOrigins__0: ${FRONTEND_URL:-http://localhost:5173}
-      SeedData: "true"
-      ApplyMigrationsOnStartup: "true"
+      SeedData: "false"
+      ApplyMigrationsOnStartup: "false"
       N8nWebhookUrl: ${N8N_WEBHOOK_URL:-http://n8n:5678}
     ports:
       - "${BACKEND_PORT:-5000}:5000"

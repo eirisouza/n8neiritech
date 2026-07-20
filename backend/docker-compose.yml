@@ -76,8 +76,8 @@ services:
 
       # Application Settings
       InternalApiKey: ${INTERNAL_API_KEY:-change-this-internal-api-key}
-      SeedData: ${SEED_DATA:-true}
-      ApplyMigrationsOnStartup: ${APPLY_MIGRATIONS_ON_STARTUP:-true}
+      SeedData: ${SEED_DATA:-false}
+      ApplyMigrationsOnStartup: ${APPLY_MIGRATIONS_ON_STARTUP:-false}
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:8080
     ports:
